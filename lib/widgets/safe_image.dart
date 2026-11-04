@@ -49,8 +49,15 @@ class SafeNetworkImage extends StatelessWidget {
       return fallbackWidget ?? _buildDefaultFallback();
     }
 
+    // Pada Flutter Web, Firebase Storage diblokir oleh CORS browser (statusCode: 0).
+    // Arahkan langsung lewat proxy CORS di web agar termuat cepat tanpa error di konsol.
+    final effectiveUrl =
+        (kIsWeb && cleanUrl.contains('firebasestorage.googleapis.com'))
+            ? toProxyUrl(cleanUrl)
+            : cleanUrl;
+
     return Image.network(
-      cleanUrl,
+      effectiveUrl,
       fit: fit,
       width: width,
       height: height,
@@ -75,11 +82,9 @@ class SafeNetworkImage extends StatelessWidget {
             );
       },
       errorBuilder: (context, error, stackTrace) {
-        debugPrint('[SafeNetworkImage] Direct load failed: $cleanUrl ($error)');
-        // On Flutter Web, browser CORS often blocks Firebase Storage.
-        // Self-heal by fetching through the CORS-enabled weserv cache proxy.
-        if (kIsWeb && !cleanUrl.contains('images.weserv.nl')) {
-          final proxyUrl = toProxyUrl(cleanUrl);
+        // Fallback untuk URL lain pada web jika mengalami isu CORS
+        if (kIsWeb && !effectiveUrl.contains('images.weserv.nl')) {
+          final proxyUrl = toProxyUrl(effectiveUrl);
           return Image.network(
             proxyUrl,
             fit: fit,
@@ -106,7 +111,6 @@ class SafeNetworkImage extends StatelessWidget {
                   );
             },
             errorBuilder: (ctx, err, st) {
-              debugPrint('[SafeNetworkImage] Proxy load also failed: $proxyUrl ($err)');
               if (errorBuilder != null) {
                 return errorBuilder!(ctx, err, st);
               }
